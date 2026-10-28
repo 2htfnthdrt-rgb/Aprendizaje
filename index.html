@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827"><title>Supervisor de Aprendizaje IA</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d2f;--line:#28364d;--text:#e8eef8;--muted:#9aaac2;--accent:#70b7ff;--good:#62d6a2;--warn:#ffc66d;--bad:#ff8181}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(145deg,#0b1220,#111b2b);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:900px;margin:auto;padding:18px}.head{display:flex;gap:12px;align-items:center;margin-bottom:18px}.logo{width:48px;height:48px;border-radius:14px;background:#1d3555;display:grid;place-items:center;font-size:25px}.sub{color:var(--muted);font-size:13px}
+h1{font-size:22px;margin:0}h2{font-size:16px;margin:0 0 12px}.panel{background:rgba(18,29,47,.95);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}.dot{width:9px;height:9px;border-radius:50%;background:var(--warn)}.dot.good{background:var(--good)}.dot.bad{background:var(--bad)}
+label{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}input,textarea{width:100%;background:#0a1322;color:var(--text);border:1px solid #35445d;border-radius:10px;padding:11px;font:inherit}textarea{min-height:110px;resize:vertical}
+button{border:0;border-radius:10px;padding:11px 15px;font-weight:650;font-size:14px;background:var(--accent);color:#081525;cursor:pointer}button.secondary{background:#27374f;color:var(--text)}button.danger{background:#512c39;color:#ffe8ec}button:disabled{opacity:.45;cursor:wait}
+.small{font-size:12px;color:var(--muted);line-height:1.5}.metric{padding:12px;border:1px solid var(--line);border-radius:12px;flex:1;min-width:120px}.metric b{display:block;font-size:22px}.metric span{font-size:12px;color:var(--muted)}
+#output{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;min-height:55px}.entry{border-top:1px solid var(--line);padding:12px 0}.entry .stamp{font-size:12px;color:var(--muted)}
+@media(max-width:540px){main{padding:12px}.panel{padding:13px}h1{font-size:19px}.row button{flex:1}}
+</style></head>
+<body><main>
+<div class="head"><div class="logo">🛡️</div><div><h1>Supervisor de Aprendizaje IA</h1><div class="sub">Versión en línea · supervisión de respuestas de IA</div></div></div>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>Estado del sistema</h2><span class="status"><span id="dot" class="dot"></span><span id="connection">Conectando…</span></span></div>
+<div class="row"><div class="metric"><b id="count">0</b><span>Consultas realizadas</span></div><div class="metric"><b id="latency">—</b><span>Última respuesta</span></div><div class="metric"><b id="flags">0</b><span>Alertas locales</span></div></div>
+<p class="small">La supervisión detecta señales sencillas como respuestas vacías, repeticiones y errores. No puede inspeccionar el estado interno del modelo ni garantizar detectar todos los problemas.</p></section>
+<section class="panel"><h2>Acceso y consulta</h2>
+<label for="access">Código de acceso de la aplicación</label><input id="access" type="password" autocomplete="current-password" placeholder="Código configurado por quien publicó la app">
+<label for="model">Modelo API habilitado en tu cuenta</label><input id="model" value="gpt-6-astra" autocomplete="off">
+<label for="prompt">Mensaje para la IA</label><textarea id="prompt">Explica brevemente cómo evaluar la consistencia de las respuestas de un sistema de IA.</textarea>
+<div class="row" style="margin-top:12px"><button id="send">Enviar consulta</button><button class="secondary" id="test">Probar conexión</button><button class="danger" id="pause">Pausar pruebas</button></div>
+<p class="small">No escribas tu clave de API aquí. El código de acceso es distinto de la clave secreta y sirve para limitar el uso de esta aplicación.</p></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>Respuesta</h2><span id="resultStatus" class="small">Sin consultas todavía</span></div><div id="output">Aquí aparecerá la respuesta de la IA.</div></section>
+<section class="panel"><div class="row" style="justify-content:space-between"><h2>Registro de supervisión</h2><button class="secondary" id="export">Exportar registro</button><button class="secondary" id="clear">Borrar registro</button></div><div id="log"><p class="small">El registro se mantiene en esta sesión del navegador.</p></div></section>
+<p class="small">La pausa impide enviar nuevas consultas desde esta interfaz; no detiene una solicitud ya enviada ni controla el servicio remoto. Usa el servicio solo con permiso y revisa los costes de API.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);let paused=false,count=0,flags=0,records=[],lastTexts=[];
+function setConn(ok,msg){$('dot').className='dot '+(ok?'good':'bad');$('connection').textContent=msg}
+async function health(){try{const r=await fetch('/api/health');const d=await r.json();setConn(!!d.ok,d.ok?'Servidor en línea · '+(d.key_configured?'API configurada':'falta configurar API'):'Servidor no disponible')}catch(e){setConn(false,'No se pudo conectar al servidor')}}
+function addLog(kind,detail,extra=''){const r={time:new Date().toISOString(),kind,detail,extra};records.unshift(r);if(records.length===1)$('log').innerHTML='';const div=document.createElement('div');div.className='entry';const stamp=document.createElement('div');stamp.className='stamp';stamp.textContent=new Date(r.time).toLocaleString();const title=document.createElement('strong');title.textContent=kind;const body=document.createElement('div');body.textContent=detail;div.append(stamp,title,body);if(extra){const e=document.createElement('div');e.className='small';e.textContent=extra;div.append(e)}$('log').prepend(div)}
+function inspect(t,ms){let a=[];if(!t.trim())a.push('respuesta vacía');if(t.length>80&&/(.)\1{24,}/s.test(t))a.push('secuencia de caracteres repetida');const n=t.toLowerCase().replace(/\s+/g,' ').trim();if(n.length>60&&lastTexts.includes(n))a.push('respuesta idéntica a una anterior');if(n.length>60){lastTexts.push(n);if(lastTexts.length>5)lastTexts.shift()}if(ms>30000)a.push('respuesta tardó más de 30 segundos');return a}
+async function sendPrompt(test=false){if(paused){$('resultStatus').textContent='Pruebas pausadas';return}const prompt=test?'Responde solamente con la palabra CONECTADO.':$('prompt').value.trim();const model=$('model').value.trim();const access=$('access').value;if(!access){$('resultStatus').textContent='Introduce el código de acceso';return}if(!prompt||!model){$('resultStatus').textContent='Completa el mensaje y el modelo';return}
+$('send').disabled=true;$('test').disabled=true;$('resultStatus').textContent='Esperando respuesta…';$('output').textContent='Solicitud en curso…';const start=performance.now();
+try{const r=await fetch('/api/respond',{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':access},body:JSON.stringify({prompt,model})});const d=await r.json();const ms=Math.round(performance.now()-start);$('latency').textContent=(ms/1000).toFixed(1)+' s';if(!r.ok||!d.ok)throw Error(d.error||('HTTP '+r.status));const answer=String(d.text||'');$('output').textContent=answer||'(La API no devolvió texto.)';count++;$('count').textContent=count;const alerts=inspect(answer,ms);if(alerts.length){flags+=alerts.length;$('flags').textContent=flags;addLog('ALERTA',alerts.join('; '),'Modelo: '+model)}addLog('Respuesta recibida',answer.slice(0,220)+(answer.length>220?'…':''),'Modelo: '+model+' · '+(ms/1000).toFixed(1)+' s');$('resultStatus').textContent=alerts.length?'Respuesta recibida con alerta':'Respuesta recibida correctamente';if(test&&answer.toLowerCase().includes('conectado'))$('resultStatus').textContent='Prueba de API completada'}
+catch(e){flags++;$('flags').textContent=flags;$('output').textContent='Error: '+e.message;$('resultStatus').textContent='Falló la solicitud';addLog('ERROR',e.message,'Revisa código de acceso, conexión, clave API, facturación y modelo.')}
+finally{$('send').disabled=false;$('test').disabled=false;health()}}
+$('send').onclick=()=>sendPrompt(false);$('test').onclick=()=>sendPrompt(true);$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Reanudar pruebas':'Pausar pruebas';$('resultStatus').textContent=paused?'Pruebas pausadas':'Pruebas reanudadas';addLog(paused?'PAUSA':'REANUDACIÓN',paused?'No se enviarán nuevas consultas.':'Se reanudaron las consultas.')};
+$('clear').onclick=()=>{records=[];lastTexts=[];$('log').innerHTML='<p class="small">Registro borrado.</p>';flags=0;$('flags').textContent='0'};
+$('export').onclick=()=>{const b=new Blob([JSON.stringify(records,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='registro-supervisor-ia.json';a.click();URL.revokeObjectURL(a.href)};health();
+</script></body></html>
